@@ -38,7 +38,7 @@ html, body {
   transform-origin: top left;
 }
 
-/* ── Hotspot (rectangle matching photo footprint) ── */
+/* ── Hotspot ── */
 .hotspot {
   position: absolute;
   z-index: 20;
@@ -100,44 +100,9 @@ html, body {
   color: #555;
   line-height: 1.45;
 }
-#start-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 1000;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 12vh;
-  cursor: pointer;
-  transition: opacity 0.5s ease;
-}
-
-#start-overlay.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-#start-overlay-text {
-  font-family: Arial, sans-serif;
-  font-size: 20px;
-  font-weight: 400;
-  color: #fff;
-  text-align: center;
-  line-height: 1.6;
-  padding: 20px 30px;
-  max-width: 80%;
-}
-
 </style>
 </head>
 <body>
-
-<div id="start-overlay">
-  <div id="start-overlay-text">
-    This is an interactive timeline of my projects.<br>Pan forward or back by dragging the mouse or using a finger.<br>Zoom by clicking the mouse or pressing with your finger on an area of interest.<br>Each project was completed while employed by the firm shown in the section footing.<br><br>Click anywhere to start.
-  </div>
-</div>
 
 <div class="frame" id="frame">
   <div class="track" id="track">
@@ -157,16 +122,16 @@ const HOTSPOT_DATA = [
     "y": 700,
     "w": 200,
     "h": 180,
-    "title": "Chattanooga Riverfront Development",
-    "desc": "4th and 5th year urban design studio"
+    "title": "",
+    "desc": ""
   },
   {
     "x": 1400,
     "y": 850,
     "w": 200,
     "h": 180,
-    "title": "Rammed Earth Works",
-    "desc": "I spent two years working with an early pioneer of rammed earth construction"
+    "title": "",
+    "desc": ""
   }
 ];
 // ═══════════════════════════════════════════════
@@ -180,30 +145,9 @@ const speed    = 0.40;
 const endPause = 6000;
 const fadeTime = 2000;
 
-let cyclePaused = true;
-let zoomed      = false;
-const zoomFactor = 2;
-
-let preZoomX = 0, preZoomY = 0;
+let cyclePaused = false;
 let audioStarted = false;
 const bgAudio = document.getElementById('bg-audio');
-const startOverlay = document.getElementById('start-overlay');
-
-startOverlay.addEventListener('click', startExperience, { once: true });
-startOverlay.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  startExperience();
-}, { once: true });
-
-function startExperience() {
-  if (!audioStarted) {
-    audioStarted = true;
-    bgAudio.play().catch(() => {});
-  }
-  startOverlay.classList.add('hidden');
-  setTimeout(() => startOverlay.remove(), 500);
-  cyclePaused = false;
-}
 
 let dragging = false;
 let moved    = false;
@@ -211,15 +155,10 @@ let startX = 0, startY = 0;
 let startPositionX = 0, startPositionY = 0;
 let activeHotspot = null;
 
-// ── Scale factor: editor stores full image pixels,
-//    viewer displays image at 400px tall ──
 function getScale() {
-  // img.naturalHeight is the real pixel height of the image
-  // img.offsetHeight is the displayed height (400px)
   return img.offsetHeight / img.naturalHeight;
 }
 
-// ── Build hotspot elements, scaling coords to display size ──
 function buildHotspots() {
   HOTSPOT_DATA.forEach((hs) => {
     const el = document.createElement('div');
@@ -249,7 +188,6 @@ function buildHotspots() {
       }
       el.classList.toggle('active');
       activeHotspot = el.classList.contains('active') ? el : null;
-      syncPopupScale();
     });
 
     el.addEventListener('touchend', (e) => {
@@ -265,7 +203,6 @@ function buildHotspots() {
       }
       el.classList.toggle('active');
       activeHotspot = el.classList.contains('active') ? el : null;
-      syncPopupScale();
     });
 
     track.appendChild(el);
@@ -274,11 +211,8 @@ function buildHotspots() {
   positionHotspots();
 }
 
-// ── Position (or reposition) all hotspots based on current zoom state ──
 function positionHotspots() {
-  const baseScale = getScale();
-  const zoomMult  = zoomed ? zoomFactor : 1;
-  const totalScale = baseScale * zoomMult;
+  const totalScale = getScale();
 
   document.querySelectorAll('.hotspot').forEach(el => {
     const hx = parseFloat(el.dataset.x);
@@ -293,60 +227,19 @@ function positionHotspots() {
   });
 }
 
-function syncPopupScale() {
-  const popups = document.querySelectorAll('.hotspot-popup');
-  // zoomed: scale up for a bigger, easier-to-read popup
-  // unzoomed: normal size
-  const s = zoomed ? 0.85 : 1;
-  popups.forEach(p => {
-    p.style.transform = `translate(-50%, -50%) scale(${s})`;
-  });
-}
-
 function closeAllPopups() {
   document.querySelectorAll('.hotspot').forEach(h => h.classList.remove('active'));
   activeHotspot = null;
 }
 
-// ── Click to zoom ──
+// ── Click (closes popups, starts audio) ──
 frame.addEventListener("click", (e) => {
   if (moved) { moved = false; return; }
   closeAllPopups();
-
   if (!audioStarted) {
     audioStarted = true;
     bgAudio.play().catch(() => {});
   }
-
-  const rect   = frame.getBoundingClientRect();
-  const clickX = e.clientX - rect.left;
-  const clickY = e.clientY - rect.top;
-
-  zoomed = !zoomed;
-
-  if (zoomed) {
-    // remember exactly where we were before zooming in
-    preZoomX = x;
-    preZoomY = y;
-
-    img.style.transform = `scale(${zoomFactor})`;
-    x = (x + clickX) * zoomFactor - frame.offsetWidth  / 2;
-    y = (y + clickY) * zoomFactor - frame.offsetHeight / 2;
-    const maxX = img.offsetWidth  * zoomFactor - frame.offsetWidth;
-    const maxY = img.offsetHeight * zoomFactor - frame.offsetHeight;
-    x = Math.max(0, Math.min(x, maxX));
-    y = Math.max(0, Math.min(y, maxY));
-  } else {
-    img.style.transform = "scale(1)";
-    // return to exactly where we were before zooming in
-    x = preZoomX;
-    y = preZoomY;
-    x = Math.max(0, Math.min(x, img.offsetWidth - frame.offsetWidth));
-  }
-
-  track.style.transform = `translate(${-x}px, ${-y}px)`;
-  positionHotspots();
-  syncPopupScale();
 });
 
 // ── Mouse drag ──
@@ -363,10 +256,8 @@ frame.addEventListener("mousedown", (e) => {
 window.addEventListener("mousemove", (e) => {
   if (!dragging) return;
   moved = true;
-  const currentWidth  = zoomed ? img.offsetWidth  * zoomFactor : img.offsetWidth;
-  const currentHeight = zoomed ? img.offsetHeight * zoomFactor : img.offsetHeight;
-  x = Math.max(0, Math.min(startPositionX - (e.clientX - startX), currentWidth  - frame.offsetWidth));
-  y = Math.max(0, Math.min(startPositionY - (e.clientY - startY), currentHeight - frame.offsetHeight));
+  x = Math.max(0, Math.min(startPositionX - (e.clientX - startX), img.offsetWidth  - frame.offsetWidth));
+  y = Math.max(0, Math.min(startPositionY - (e.clientY - startY), img.offsetHeight - frame.offsetHeight));
   track.style.transform = `translate(${-x}px, ${-y}px)`;
 });
 
@@ -390,10 +281,8 @@ frame.addEventListener("touchstart", (e) => {
 frame.addEventListener("touchmove", (e) => {
   if (!dragging || e.touches.length !== 1) return;
   moved = true;
-  const currentWidth  = zoomed ? img.offsetWidth  * zoomFactor : img.offsetWidth;
-  const currentHeight = zoomed ? img.offsetHeight * zoomFactor : img.offsetHeight;
-  x = Math.max(0, Math.min(startPositionX - (e.touches[0].clientX - startX), currentWidth  - frame.offsetWidth));
-  y = Math.max(0, Math.min(startPositionY - (e.touches[0].clientY - startY), currentHeight - frame.offsetHeight));
+  x = Math.max(0, Math.min(startPositionX - (e.touches[0].clientX - startX), img.offsetWidth  - frame.offsetWidth));
+  y = Math.max(0, Math.min(startPositionY - (e.touches[0].clientY - startY), img.offsetHeight - frame.offsetHeight));
   track.style.transform = `translate(${-x}px, ${-y}px)`;
   e.preventDefault();
 }, { passive: false });
@@ -402,46 +291,18 @@ frame.addEventListener("touchend", (e) => {
   dragging = false;
   if (!moved) {
     closeAllPopups();
-
     if (!audioStarted) {
       audioStarted = true;
       bgAudio.play().catch(() => {});
     }
-
-    const touch  = e.changedTouches[0];
-    const rect   = frame.getBoundingClientRect();
-    const clickX = touch.clientX - rect.left;
-    const clickY = touch.clientY - rect.top;
-    zoomed = !zoomed;
-    if (zoomed) {
-      preZoomX = x;
-      preZoomY = y;
-
-      img.style.transform = `scale(${zoomFactor})`;
-      x = (x + clickX) * zoomFactor - frame.offsetWidth  / 2;
-      y = (y + clickY) * zoomFactor - frame.offsetHeight / 2;
-      const maxX = img.offsetWidth  * zoomFactor - frame.offsetWidth;
-      const maxY = img.offsetHeight * zoomFactor - frame.offsetHeight;
-      x = Math.max(0, Math.min(x, maxX));
-      y = Math.max(0, Math.min(y, maxY));
-    } else {
-      img.style.transform = "scale(1)";
-      x = preZoomX;
-      y = preZoomY;
-      x = Math.max(0, Math.min(x, img.offsetWidth - frame.offsetWidth));
-    }
-    track.style.transform = `translate(${-x}px, ${-y}px)`;
-    positionHotspots();
-    syncPopupScale();
   }
   moved = false;
 });
 
 // ── Auto-scroll ──
 function animate() {
-  const currentWidth = zoomed ? img.offsetWidth * zoomFactor : img.offsetWidth;
-  const maxScroll    = currentWidth - frame.offsetWidth;
-  if (!zoomed && !dragging && !cyclePaused && maxScroll > 0) {
+  const maxScroll = img.offsetWidth - frame.offsetWidth;
+  if (!dragging && !cyclePaused && maxScroll > 0) {
     x += speed;
     if (x >= maxScroll) {
       cyclePaused = true;
