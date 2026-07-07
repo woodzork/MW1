@@ -28,10 +28,16 @@ html, body {
   top: 0;
   left: 0;
   will-change: transform;
+  opacity: 0;
+  transition: opacity 4.0s ease-in;
+}
+
+.track.visible {
+  opacity: 1;
 }
 
 .track img {
-  height: 400px;
+  height: 500px;
   width: auto;
   display: block;
   pointer-events: none;
@@ -145,7 +151,8 @@ const speed    = 0.40;
 const endPause = 6000;
 const fadeTime = 2000;
 
-let cyclePaused = false;
+let cyclePaused = true;   // stays paused until first drag
+let started     = false;  // flips on first drag
 let audioStarted = false;
 const bgAudio = document.getElementById('bg-audio');
 
@@ -154,6 +161,17 @@ let moved    = false;
 let startX = 0, startY = 0;
 let startPositionX = 0, startPositionY = 0;
 let activeHotspot = null;
+
+// ── Activate the piece on first drag ──
+function activate() {
+  if (started) return;
+  started      = true;
+  cyclePaused  = false;
+  if (!audioStarted) {
+    audioStarted = true;
+    bgAudio.play().catch(() => {});
+  }
+}
 
 function getScale() {
   return img.offsetHeight / img.naturalHeight;
@@ -179,10 +197,7 @@ function buildHotspots() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       if (moved) return;
-      if (!audioStarted) {
-        audioStarted = true;
-        bgAudio.play().catch(() => {});
-      }
+      activate();
       if (activeHotspot && activeHotspot !== el) {
         activeHotspot.classList.remove('active');
       }
@@ -194,10 +209,7 @@ function buildHotspots() {
       e.stopPropagation();
       e.preventDefault();
       if (moved) return;
-      if (!audioStarted) {
-        audioStarted = true;
-        bgAudio.play().catch(() => {});
-      }
+      activate();
       if (activeHotspot && activeHotspot !== el) {
         activeHotspot.classList.remove('active');
       }
@@ -213,13 +225,11 @@ function buildHotspots() {
 
 function positionHotspots() {
   const totalScale = getScale();
-
   document.querySelectorAll('.hotspot').forEach(el => {
     const hx = parseFloat(el.dataset.x);
     const hy = parseFloat(el.dataset.y);
     const hw = parseFloat(el.dataset.w);
     const hh = parseFloat(el.dataset.h);
-
     el.style.left   = (hx * totalScale) + 'px';
     el.style.top    = (hy * totalScale) + 'px';
     el.style.width  = (hw * totalScale) + 'px';
@@ -232,14 +242,11 @@ function closeAllPopups() {
   activeHotspot = null;
 }
 
-// ── Click (closes popups, starts audio) ──
+// ── Click ──
 frame.addEventListener("click", (e) => {
   if (moved) { moved = false; return; }
   closeAllPopups();
-  if (!audioStarted) {
-    audioStarted = true;
-    bgAudio.play().catch(() => {});
-  }
+  activate();
 });
 
 // ── Mouse drag ──
@@ -264,6 +271,7 @@ window.addEventListener("mousemove", (e) => {
 window.addEventListener("mouseup", () => {
   dragging = false;
   frame.style.cursor = "grab";
+  activate();
 });
 
 // ── Touch drag ──
@@ -289,12 +297,9 @@ frame.addEventListener("touchmove", (e) => {
 
 frame.addEventListener("touchend", (e) => {
   dragging = false;
+  activate();
   if (!moved) {
     closeAllPopups();
-    if (!audioStarted) {
-      audioStarted = true;
-      bgAudio.play().catch(() => {});
-    }
   }
   moved = false;
 });
@@ -321,8 +326,14 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-img.onload = () => { buildHotspots(); animate(); };
-if (img.complete) { buildHotspots(); animate(); }
+function init() {
+  buildHotspots();
+  animate();
+  setTimeout(() => track.classList.add('visible'), 100);
+}
+
+img.onload = init;
+if (img.complete) init();
 </script>
 </body>
 </html>
