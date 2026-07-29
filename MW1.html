@@ -37,7 +37,7 @@ html, body {
 }
 
 .track img {
-  height: 500px;
+  height: 600px;
   width: auto;
   display: block;
   pointer-events: none;
@@ -116,13 +116,13 @@ html, body {
   </div>
 </div>
 
-<audio id="bg-audio" src="https://woodzork.github.io/MW1/Night%20Drive-on-site.mp3" type="audio/mpeg" preload="auto"></audio>
+<audio id="bg-audio" src="https://woodzork.github.io/MW1/Softchill.mp3" type="audio/mpeg" preload="auto"></audio>
 
 <script>
 // ═══════════════════════════════════════════════
-//  CHAPTER 1 — MW1.jpg hotspots
+//  HOTSPOT DATA — paste your exported JSON here
 // ═══════════════════════════════════════════════
-const HOTSPOT_DATA_1 = [
+const HOTSPOT_DATA = [
   {
     "x": 800,
     "y": 700,
@@ -140,43 +140,19 @@ const HOTSPOT_DATA_1 = [
     "desc": ""
   }
 ];
-
 // ═══════════════════════════════════════════════
-//  CHAPTER 2 — MW2.jpg hotspots
-// ═══════════════════════════════════════════════
-const HOTSPOT_DATA_2 = [
-  // paste MW2 hotspot data here when ready
-];
-// ═══════════════════════════════════════════════
-
-// ── Chapter definitions ──
-const CHAPTERS = [
-  {
-    src:      'https://woodzork.github.io/MW1/MW1.jpg',
-    hotspots: HOTSPOT_DATA_1
-  },
-  {
-    src:      'https://woodzork.github.io/MW1/MW2.jpg',
-    hotspots: HOTSPOT_DATA_2
-  }
-];
-
-const CROSSFADE_DURATION = 3000;  // ms — fade between chapters
-const END_PAUSE          = 6000;  // ms — pause at end of each chapter
-const FADE_TIME          = 2000;  // ms — internal reset fade (unused between chapters)
-
-let currentChapter = 0;
-let transitioning  = false;
 
 const track = document.getElementById("track");
 const img   = document.getElementById("img");
 const frame = document.getElementById("frame");
 
 let x = 0, y = 0;
-const speed = 0.40;
+const speed    = 1.0;
+const endPause = 6000;
+const fadeTime = 2000;
 
-let cyclePaused  = true;
-let started      = false;
+let cyclePaused = true;   // stays paused until first drag
+let started     = false;  // flips on first drag
 let audioStarted = false;
 const bgAudio = document.getElementById('bg-audio');
 
@@ -186,11 +162,11 @@ let startX = 0, startY = 0;
 let startPositionX = 0, startPositionY = 0;
 let activeHotspot = null;
 
-// ── Activate on first drag/tap ──
+// ── Activate the piece on first drag ──
 function activate() {
   if (started) return;
-  started     = true;
-  cyclePaused = false;
+  started      = true;
+  cyclePaused  = false;
   if (!audioStarted) {
     audioStarted = true;
     bgAudio.play().catch(() => {});
@@ -201,12 +177,8 @@ function getScale() {
   return img.offsetHeight / img.naturalHeight;
 }
 
-// ── Hotspot building ──
-function buildHotspots(hotspotData) {
-  // remove any existing hotspots
-  document.querySelectorAll('.hotspot').forEach(h => h.remove());
-
-  hotspotData.forEach((hs) => {
+function buildHotspots() {
+  HOTSPOT_DATA.forEach((hs) => {
     const el = document.createElement('div');
     el.className = 'hotspot';
     el.dataset.x = hs.x;
@@ -270,48 +242,6 @@ function closeAllPopups() {
   activeHotspot = null;
 }
 
-// ── Crossfade to next chapter ──
-function transitionToChapter(index) {
-  if (transitioning) return;
-  transitioning = true;
-  cyclePaused   = true;
-  closeAllPopups();
-
-  // fade out
-  track.style.transition = `opacity ${CROSSFADE_DURATION}ms ease`;
-  track.style.opacity    = '0';
-
-  setTimeout(() => {
-    // reset position
-    x = 0; y = 0;
-    track.style.transform = 'translate(0px, 0px)';
-
-    // swap image
-    currentChapter = index;
-    const chapter  = CHAPTERS[currentChapter];
-    img.src        = chapter.src;
-
-    img.onload = () => {
-      buildHotspots(chapter.hotspots);
-
-      // fade in new chapter
-      track.style.transition = `opacity ${CROSSFADE_DURATION}ms ease-in`;
-      track.style.opacity    = '1';
-
-      setTimeout(() => {
-        transitioning = false;
-        cyclePaused   = false;
-      }, CROSSFADE_DURATION);
-    };
-
-    // if image already cached
-    if (img.complete && img.naturalWidth) {
-      img.onload();
-    }
-
-  }, CROSSFADE_DURATION);
-}
-
 // ── Click ──
 frame.addEventListener("click", (e) => {
   if (moved) { moved = false; return; }
@@ -368,7 +298,9 @@ frame.addEventListener("touchmove", (e) => {
 frame.addEventListener("touchend", (e) => {
   dragging = false;
   activate();
-  if (!moved) closeAllPopups();
+  if (!moved) {
+    closeAllPopups();
+  }
   moved = false;
 });
 
@@ -380,24 +312,24 @@ function animate() {
     if (x >= maxScroll) {
       cyclePaused = true;
       setTimeout(() => {
-        // advance to next chapter, or loop back to first
-        const next = (currentChapter + 1) % CHAPTERS.length;
-        transitionToChapter(next);
-      }, END_PAUSE);
+        track.style.opacity = "0";
+        setTimeout(() => {
+          x = 0; y = 0;
+          track.style.transform = "translate(0px,0px)";
+          track.style.opacity   = "1";
+          cyclePaused = false;
+        }, fadeTime);
+      }, endPause);
     }
     track.style.transform = `translate(${-x}px, 0px)`;
   }
   requestAnimationFrame(animate);
 }
 
-// ── Init ──
 function init() {
-  buildHotspots(CHAPTERS[0].hotspots);
+  buildHotspots();
   animate();
-  setTimeout(() => {
-    track.style.transition = 'opacity 4.0s ease-in';
-    track.classList.add('visible');
-  }, 100);
+  setTimeout(() => track.classList.add('visible'), 100);
 }
 
 img.onload = init;
