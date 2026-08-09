@@ -116,13 +116,13 @@ html, body {
   </div>
 </div>
 
-<audio id="bg-audio" src="https://woodzork.github.io/MW1/Softchill.mp3" type="audio/mpeg" preload="auto"></audio>
+<audio id="bg-audio" src="https://woodzork.github.io/MW1/Night%20Drive-on-site.mp3" type="audio/mpeg" preload="auto"></audio>
 
 <script>
 // ═══════════════════════════════════════════════
-//  HOTSPOT DATA — paste your exported JSON here
+//  CHAPTER 1 — MW1.jpg hotspots
 // ═══════════════════════════════════════════════
-const HOTSPOT_DATA = [
+const HOTSPOT_DATA_1 = [
   {
     "x": 800,
     "y": 700,
@@ -140,19 +140,38 @@ const HOTSPOT_DATA = [
     "desc": ""
   }
 ];
+
 // ═══════════════════════════════════════════════
+//  CHAPTER 2 — MW2.jpg hotspots
+// ═══════════════════════════════════════════════
+const HOTSPOT_DATA_2 = [
+  // paste MW2 hotspot data here when ready
+];
+
+// ═══════════════════════════════════════════════
+//  TIMING — adjust these to taste
+// ═══════════════════════════════════════════════
+const speed            = 0.40;  // scroll speed (pixels per frame)
+const END_PAUSE        = 2000;  // ms to hold at end before fade begins
+const CROSSFADE_OUT    = 3000;  // ms for fade to black
+const CROSSFADE_IN     = 3000;  // ms for next image to fade in
+
+// ── Chapter definitions ──
+const CHAPTERS = [
+  { src: 'https://woodzork.github.io/MW1/MW1.jpg', hotspots: HOTSPOT_DATA_1 },
+  { src: 'https://woodzork.github.io/MW1/MW2.jpg', hotspots: HOTSPOT_DATA_2 }
+];
+
+let currentChapter = 0;
+let transitioning  = false;
 
 const track = document.getElementById("track");
 const img   = document.getElementById("img");
 const frame = document.getElementById("frame");
 
 let x = 0, y = 0;
-const speed    = 1.0;
-const endPause = 6000;
-const fadeTime = 2000;
-
-let cyclePaused = true;   // stays paused until first drag
-let started     = false;  // flips on first drag
+let cyclePaused  = true;
+let started      = false;
 let audioStarted = false;
 const bgAudio = document.getElementById('bg-audio');
 
@@ -162,11 +181,11 @@ let startX = 0, startY = 0;
 let startPositionX = 0, startPositionY = 0;
 let activeHotspot = null;
 
-// ── Activate the piece on first drag ──
+// ── Activate on first interaction ──
 function activate() {
   if (started) return;
-  started      = true;
-  cyclePaused  = false;
+  started     = true;
+  cyclePaused = false;
   if (!audioStarted) {
     audioStarted = true;
     bgAudio.play().catch(() => {});
@@ -177,8 +196,10 @@ function getScale() {
   return img.offsetHeight / img.naturalHeight;
 }
 
-function buildHotspots() {
-  HOTSPOT_DATA.forEach((hs) => {
+function buildHotspots(hotspotData) {
+  document.querySelectorAll('.hotspot').forEach(h => h.remove());
+
+  hotspotData.forEach((hs) => {
     const el = document.createElement('div');
     el.className = 'hotspot';
     el.dataset.x = hs.x;
@@ -198,9 +219,7 @@ function buildHotspots() {
       e.stopPropagation();
       if (moved) return;
       activate();
-      if (activeHotspot && activeHotspot !== el) {
-        activeHotspot.classList.remove('active');
-      }
+      if (activeHotspot && activeHotspot !== el) activeHotspot.classList.remove('active');
       el.classList.toggle('active');
       activeHotspot = el.classList.contains('active') ? el : null;
     });
@@ -210,9 +229,7 @@ function buildHotspots() {
       e.preventDefault();
       if (moved) return;
       activate();
-      if (activeHotspot && activeHotspot !== el) {
-        activeHotspot.classList.remove('active');
-      }
+      if (activeHotspot && activeHotspot !== el) activeHotspot.classList.remove('active');
       el.classList.toggle('active');
       activeHotspot = el.classList.contains('active') ? el : null;
     });
@@ -226,20 +243,60 @@ function buildHotspots() {
 function positionHotspots() {
   const totalScale = getScale();
   document.querySelectorAll('.hotspot').forEach(el => {
-    const hx = parseFloat(el.dataset.x);
-    const hy = parseFloat(el.dataset.y);
-    const hw = parseFloat(el.dataset.w);
-    const hh = parseFloat(el.dataset.h);
-    el.style.left   = (hx * totalScale) + 'px';
-    el.style.top    = (hy * totalScale) + 'px';
-    el.style.width  = (hw * totalScale) + 'px';
-    el.style.height = (hh * totalScale) + 'px';
+    el.style.left   = (parseFloat(el.dataset.x) * totalScale) + 'px';
+    el.style.top    = (parseFloat(el.dataset.y) * totalScale) + 'px';
+    el.style.width  = (parseFloat(el.dataset.w) * totalScale) + 'px';
+    el.style.height = (parseFloat(el.dataset.h) * totalScale) + 'px';
   });
 }
 
 function closeAllPopups() {
   document.querySelectorAll('.hotspot').forEach(h => h.classList.remove('active'));
   activeHotspot = null;
+}
+
+// ── Crossfade transition ──
+// Sequence: scroll stops → END_PAUSE → fade out (CROSSFADE_OUT ms)
+//           → swap image → fade in (CROSSFADE_IN ms) → scroll resumes
+function transitionToChapter(index) {
+  if (transitioning) return;
+  transitioning = true;
+  cyclePaused   = true;
+  closeAllPopups();
+
+  // Step 1: pause, then begin fade out
+  setTimeout(() => {
+    track.style.transition = `opacity ${CROSSFADE_OUT}ms ease`;
+    track.style.opacity    = '0';
+
+    // Step 2: after fade out completes, swap image and reset position
+    setTimeout(() => {
+      x = 0; y = 0;
+      track.style.transform = 'translate(0px, 0px)';
+      currentChapter = index;
+      img.src = CHAPTERS[currentChapter].src;
+
+      // Step 3: once new image loads, fade it in and resume
+      function onLoaded() {
+        buildHotspots(CHAPTERS[currentChapter].hotspots);
+        track.style.transition = `opacity ${CROSSFADE_IN}ms ease-in`;
+        track.style.opacity    = '1';
+
+        setTimeout(() => {
+          transitioning = false;
+          cyclePaused   = false;
+        }, CROSSFADE_IN);
+      }
+
+      if (img.complete && img.naturalWidth) {
+        onLoaded();
+      } else {
+        img.onload = onLoaded;
+      }
+
+    }, CROSSFADE_OUT);
+
+  }, END_PAUSE);
 }
 
 // ── Click ──
@@ -298,9 +355,7 @@ frame.addEventListener("touchmove", (e) => {
 frame.addEventListener("touchend", (e) => {
   dragging = false;
   activate();
-  if (!moved) {
-    closeAllPopups();
-  }
+  if (!moved) closeAllPopups();
   moved = false;
 });
 
@@ -311,25 +366,22 @@ function animate() {
     x += speed;
     if (x >= maxScroll) {
       cyclePaused = true;
-      setTimeout(() => {
-        track.style.opacity = "0";
-        setTimeout(() => {
-          x = 0; y = 0;
-          track.style.transform = "translate(0px,0px)";
-          track.style.opacity   = "1";
-          cyclePaused = false;
-        }, fadeTime);
-      }, endPause);
+      const next = (currentChapter + 1) % CHAPTERS.length;
+      transitionToChapter(next);
     }
     track.style.transform = `translate(${-x}px, 0px)`;
   }
   requestAnimationFrame(animate);
 }
 
+// ── Init ──
 function init() {
-  buildHotspots();
+  buildHotspots(CHAPTERS[0].hotspots);
   animate();
-  setTimeout(() => track.classList.add('visible'), 100);
+  setTimeout(() => {
+    track.style.transition = 'opacity 4.0s ease-in';
+    track.classList.add('visible');
+  }, 100);
 }
 
 img.onload = init;
